@@ -86,7 +86,8 @@ class socketServer
                 } else {
                     $data = $this->dataFrameParse($buffer);
                 }
-                $this->dealGetData($socket, $data);//把接收到的数据进行处理，把处理结果发送出去(全发送，发给全部client)
+                list($sendClient, $response) = $this->dealGetData($socket, $data);//把接收到的数据进行处理，把处理结果发送出去(全发送，发给全部client)
+                $sendClient && $response && $this->dealSendData($sendClient, $response);
             }
         }
     }
@@ -123,7 +124,7 @@ class socketServer
      * 业务处理
      * @param $socket
      * @param $recv_msg
-     * @return void
+     * @return mixed
      */
     protected function dealGetData($socket, $recv_msg)
     {
@@ -153,8 +154,10 @@ class socketServer
                 $response['msg'] = $msg_content;
                 $response['headerimg'] = $userInfo['headerimg'];
                 break;
+            default:
+                $response = false;
         }
-        $this->dealSendData(self::SEND_ALL_CLIENT, $response);
+        return [self::SEND_ALL_CLIENT, $response];
     }
     /**
      * 数据广播
