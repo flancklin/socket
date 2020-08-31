@@ -105,6 +105,7 @@
     function onmessage(e)
     {
         var data = JSON.parse(e.data);
+        console.log(data)
         switch (data.type) {
             case 'handShake':
                 console.log(data.msg);
