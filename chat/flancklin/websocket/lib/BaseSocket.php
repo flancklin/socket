@@ -69,7 +69,7 @@ abstract class BaseSocket{
         // 写入socket
         socket_write($client, $upgrade, strlen($upgrade));
         $this->_handShakes[(int)$client] = true;// 标记握手已经成功，下次接受数据采用数据帧格式
-        $this->dealSendData($client, ['type' => 'handShake', 'msg' => '握手成功']);
+        $this->dealSendData($client, ['type' => 'hand_shake', 'message' => '握手成功']);
         return  true;
     }
 
@@ -89,16 +89,25 @@ abstract class BaseSocket{
     }
     /**
      * 断开连接
-     * @param $clientKey
+     * @param  $key
+     * @param $type
      * @return boolean
      */
-    protected function dealDisconnect($clientKey)
+    protected function dealDisconnect($key, $type = 'clientKey')
     {
-        unset($this->_clients[$clientKey]);//删掉连接
-        unset($this->_handShakes[$clientKey]);//删掉握手信息
-        if($uid = array_search($clientKey, $this->_userSocket)){
+        if($type == 'clientKey'){
+            $uid = array_search($key, $this->_userSocket);
+        }else if($type == 'uid'){
+            $uid = $type;
+            $key = $this->_userSocket[$uid];
+        }
+        if($uid){
             unset($this->_userSocket[$uid]);//删掉【用户和socket连接的绑定】
             unset($this->_users[$uid]);//删掉用户信息
+        }
+        if($key){
+            unset($this->_clients[$key]);//删掉连接
+            unset($this->_handShakes[$key]);//删掉握手信息
         }
         return true;
     }

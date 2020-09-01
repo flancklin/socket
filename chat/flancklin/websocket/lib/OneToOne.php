@@ -4,9 +4,6 @@ namespace flancklin\websocket;
 
 class OneToOne extends BaseSocket
 {
-    protected $_works = [];
-
-
     protected function initClient(){
         $this->log("client:begin");
         //监听client是否有信息 sockets_select。（从众多client中选出有信息的那几个）
@@ -39,7 +36,7 @@ class OneToOne extends BaseSocket
                 } else {
                     $data = $this->dataFrameParse($buffer);
                 }
-                list($sendClient, $response) = $this->dealGetData((int)$client, $data);//把接收到的数据进行处理，把处理结果发送出去(全发送，发给全部client)
+                list($sendClient, $response) = $this->dealGetData($client, $data);//把接收到的数据进行处理，把处理结果发送出去(全发送，发给全部client)
                 $sendClient && $response && $this->dealSendData($sendClient, $response);
             }
         }
@@ -47,41 +44,76 @@ class OneToOne extends BaseSocket
 
     /**
      * 业务处理
-     * @param $clientKey
+     * @param $client
      * @param $data
      * @return mixed
      */
-    protected function dealGetData($socket, $recv_msg)
+    protected function dealGetData($client, $data)
     {
-        $clientKey = (int)$socket;
-        $msg_type = $recv_msg['type'];
-        $msg_content = $recv_msg['msg'];
-        $response = ['type' => $msg_type];
-        switch ($msg_type) {
+        $clientKey = (int)$client;
+        //服务端
+        //发送：  ['type' => 'hand_shake', 'message' => '握手成功']
+        //接收：  ['type' => 'login', 'uid_from' => 123]
+        //发送：  ['type' => 'login', 'uid_from' => 123, 'message' =>'登录成功']
+        //接收：  ['type' => 'chat', 'uid_from'=>123, 'uid_to' => 456, 'message' => '2号。你在干嘛']
+        //发送：  ['type' => 'chat', 'uid_from'=>[info], 'uid_to' => [info], 'message' => '2号。你在干嘛']
+        //接收：  ['type' => 'logout', 'uid_from'=>123]
+
+        //错误：  ['type' => 'error', 'code'=>101, 'message' => '用户不存在']
+
+
+        $uidFrom = $data['uid_from'] ?? 0;
+        $type = $data['type'];
+
+        $sockets = [];
+        $response = ['type' => $type];
+        switch ($type) {
             case 'login':
-                $this->_users[$clientKey] = [
-                    'client_no' => $clientKey,
-                    "username" => $msg_content,
-                    'headerimg' => $recv_msg['headerimg'] ?? '',
-                    "login_time" =>time()
-                ];
-                // 鍙栧緱鏈€鏂扮殑鍚嶅瓧璁板綍
-                $response['msg'] = $msg_content;
+                $this->_users[$uidFrom] = $this->userInfo($uidFrom);
+                $this->_userSocket[$uidFrom] = $client;
                 $response['user_list'] = array_values($this->_users);;
+                $response['message'] = '系统消息:'. $this->_users[$uidFrom]['username'].'已上线';
+                $sockets = self::SEND_ALL_CLIENT;//通知所有人我登录成功了
                 break;
             case 'logout':
-                $response['user_list'] = array_values($this->_users);;
-                $response['msg'] = $msg_content;
+                $response['user_list'] = array_values($this->_users);
+                $response['message'] = '系统消息:'. $this->_users[$uidFrom]['username'].'已下线';
+                $sockets = self::SEND_ALL_CLIENT;//通知所有人我退出了
                 break;
-            case 'user':
-                $userInfo = $this->_users[$clientKey];
-                $response['from'] = $userInfo['username'];
-                $response['msg'] = $msg_content;
-                $response['headerimg'] = $userInfo['headerimg'];
+            case 'chat':
+                $uidTo = $data['uid_to'] ?? 0;
+                $toClient = $uidTo ? (isset($this->_userSocket[$uidTo]) ? $this->_userSocket[$uidTo] : null) : null;
+                if($uidTo && $toClient){
+                    $response = $data;
+                    $response['uid_from'] = $this->_users[$uidFrom];
+                    $response['uid_to'] = $this->_users[$uidTo];
+                    $sockets = [$client, $toClient];
+                }else{
+                    $response = ['type' => 'error', 'code'=>101, 'message' => '用户不存在'];
+                    $sockets = $client;
+                }
                 break;
             default:
                 $response = false;
         }
-        return [self::SEND_ALL_CLIENT, $response];
+        return [$sockets, $response];
+    }
+
+
+    public function userInfo($uid){
+        $imgArr = ['a1.jpg', 'a2.jpg', 'a3.jpg', 'a4.jpg', 'a5.jpg', 'a6.jpg', 'a7.jpg', 'a8.jpg', 'a9.jpg', 'a10.jpg'];
+        static $imgRelation = [];
+        if(isset($imgRelation[$uid])){
+            $img = $imgRelation[$uid];
+        }else{
+            $img = 'img/' . $imgArr[array_rand($imgArr)];
+            $imgRelation[$uid] = $img;
+        }
+
+        return [
+            'uid' => $uid,
+            'username' => 'name'.$uid,
+            'headerimg' => $img,
+        ];
     }
 }
